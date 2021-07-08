@@ -5,6 +5,7 @@ import com.myflink.hotitems_analysis.beans.UserBehavior;
 import org.apache.commons.compress.utils.Lists;
 import org.apache.flink.api.common.functions.AggregateFunction;
 import org.apache.flink.api.common.functions.MapFunction;
+import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.api.java.tuple.Tuple;
@@ -20,11 +21,13 @@ import org.apache.flink.streaming.api.functions.timestamps.BoundedOutOfOrderness
 import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
+import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
 import org.apache.flink.util.Collector;
 
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Properties;
 
 /**
  * • 抽取出业务时间戳，告诉 Flink 框架基于业务时间做窗口
@@ -45,8 +48,18 @@ public class HotItems {
         env.setParallelism(1);
         env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 
-        // 2. 读取数据，创建DataStream
-        DataStreamSource<String> inputStream = env.readTextFile("/Users/xuzengfeng/IdeaProjects/UserBehaviorAnalysis/HotItemsAnalysis/src/main/resources/UserBehavior.csv");
+        // 2. todo 读取文件数据，创建DataStream
+//        DataStreamSource<String> inputStream = env.readTextFile("/Users/xuzengfeng/IdeaProjects/UserBehaviorAnalysis/HotItemsAnalysis/src/main/resources/UserBehavior.csv");
+
+        // 从kafka获取数据
+        Properties properties = new Properties();
+        properties.setProperty("bootstrap.servers", "linux121:9092");
+        properties.setProperty("group.id", "consumer");
+        properties.setProperty("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+        properties.setProperty("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+        properties.setProperty("auto.offset.reset", "latest");
+
+        DataStreamSource<String> inputStream = env.addSource(new FlinkKafkaConsumer<String>("hotitems", new SimpleStringSchema(), properties));
 
         // 3. 转换为PoJO，分配时间戳和watermark
         DataStream<UserBehavior> dataStream = inputStream.map(new MapFunction<String, UserBehavior>() {
@@ -78,12 +91,12 @@ public class HotItems {
 //        windowAggStream.print();
 
         // 5. 收集同一窗口的所有商品的count数据， 排序输出top n
-        windowAggStream
+        SingleOutputStreamOperator<String> resultStream = windowAggStream
                 .keyBy("windowEnd")
                 // 使用processFunction 更底层的API， 用到定时器
-                .process(new TopNHotItems(5));  // 用自定义处理函数排序前5
+                .process(new TopNHotItems(5));// 用自定义处理函数排序前5
 
-
+        resultStream.print("top5");
 
         env.execute();
 
@@ -165,7 +178,7 @@ public class HotItems {
             itemViewCounts.sort(new Comparator<ItemViewCount>() {
                 @Override
                 public int compare(ItemViewCount o1, ItemViewCount o2) {
-                    return o2.getCount().intValue() - o1.getCount().intValue();
+                    return o2.getCount().intValue() - o1.getCount().intValue();  // 降序
                 }
             });
 
