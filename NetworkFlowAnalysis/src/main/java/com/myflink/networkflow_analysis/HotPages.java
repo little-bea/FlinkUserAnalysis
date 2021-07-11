@@ -59,10 +59,10 @@ public class HotPages {
 //        dataStream.print("data");
 
 
-
         //过滤，分组开窗聚合
         // 定义一个侧输出流标签
-        OutputTag<ApacheLogEvent> lateTag = new OutputTag<ApacheLogEvent>("late") {};
+        OutputTag<ApacheLogEvent> lateTag = new OutputTag<ApacheLogEvent>("late") {
+        };
 
         SingleOutputStreamOperator<PageViewCount> windowAggStream = dataStream
                 .filter(data -> "GET".equals(data.getMethod()))   // 过滤出get请求
@@ -131,6 +131,7 @@ public class HotPages {
             this.topSize = topSize;
         }
 
+        //        ListState<PageViewCount> pageViewCountListState;
         // 定义状态， 保存当前所有PageViewCount到Map中
         MapState<String, Long> pageViewCountMapState;
 
@@ -150,7 +151,7 @@ public class HotPages {
         @Override
         public void onTimer(long timestamp, OnTimerContext ctx, Collector<String> out) throws Exception {
             // 先判断是否到了窗口关闭清理时间，如果是，直接清空状态返回
-            if( timestamp == ctx.getCurrentKey() + 60 * 1000L ){
+            if (timestamp == ctx.getCurrentKey() + 60 * 1000L) {
                 pageViewCountMapState.clear();
                 return;
             }
@@ -160,7 +161,15 @@ public class HotPages {
             pageViewCounts.sort(new Comparator<Map.Entry<String, Long>>() {
                 @Override
                 public int compare(Map.Entry<String, Long> o1, Map.Entry<String, Long> o2) {
-                    return o2.getValue().intValue() - o1.getValue().intValue();  // 降序
+
+                    // 使用 intValue的话，long 转 int 可能会丢失精度
+//                    return o2.getValue().intValue() - o1.getValue().intValue();  // 降序
+                    if(o1.getValue() > o2.getValue())
+                        return -1;
+                    else if(o1.getValue() < o2.getValue())
+                        return 1;
+                    else
+                        return 0;
                 }
             });
 
@@ -183,6 +192,8 @@ public class HotPages {
             Thread.sleep(1000L);
 
             out.collect(resultBuilder.toString());
+
+//            pageViewCountListState.clear();
         }
     }
 }
