@@ -139,7 +139,15 @@ public class UvWithBloomFilter {
                 jedis.setbit(bitmapKey, offset, true);
 
                 // 更新redis中保存的count值
-                Long uvCount = 0L
+                Long uvCount = 0L;  // 初始count值
+                String uvCountString = jedis.hget(countHashName, countKey);
+                if (uvCountString != null && !"".equals(uvCountString)) {
+                    uvCount = Long.valueOf(uvCountString);
+                }
+
+                jedis.hset(countHashName, countKey, String.valueOf(uvCount + 1));
+
+                out.collect(new PageViewCount("uv", windowEnd, uvCount + 1));
             }
 
 
