@@ -82,7 +82,7 @@ public class OrderTimeoutWithoutCep {
             Long timerTs = timerTsState.value();
 
             // 判断当前事件类型
-            if ("create".equals(orderEvent.getOrderId())) {
+            if ("create".equals(orderEvent.getEventType())) {
                 // 1. 如果来的是create， 要判断是否支付过
                 if (isPayed) {
                     // 1.1 如果已经正常支付，输出正常匹配结果
